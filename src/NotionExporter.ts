@@ -12,6 +12,8 @@ interface Task {
 /** Lightweight client to export ZIP, Markdown or CSV files from a Notion block/page. */
 export class NotionExporter {
   protected readonly client: AxiosInstance
+  private readonly recursiveExport: boolean
+  private readonly noFilesIncluded: boolean
 
   /**
    * Create a new NotionExporter client. To export any blocks/pages from
@@ -21,13 +23,15 @@ export class NotionExporter {
    * @param tokenV2 – the Notion `token_v2` Cookie value
    * @param fileToken – the Notion `file_token` Cookie value
    */
-  constructor(tokenV2: string, fileToken: string) {
+  constructor(tokenV2: string, fileToken: string, noFiles: boolean, recursive: boolean = false) {
     this.client = axios.create({
       baseURL: "https://www.notion.so/api/v3/",
       headers: {
         Cookie: `token_v2=${tokenV2};file_token=${fileToken}`,
       },
     })
+    this.recursiveExport = recursive;
+    this.noFilesIncluded = noFiles;
   }
 
   /**
@@ -39,19 +43,20 @@ export class NotionExporter {
   async getTaskId(idOrUrl: string): Promise<string> {
     const id = validateUuid(blockIdFromUrl(idOrUrl))
     if (!id) return Promise.reject(`Invalid URL or blockId: ${idOrUrl}`)
+    const exportOptions = Object.assign({
+      exportType: "markdown",
+      timeZone: "Europe/Zurich",
+      locale: "en",
+      collectionViewExportType: "currentView",
+    }, this.noFilesIncluded ? { includeContents: "no_files" }: {});
 
     const res = await this.client.post("enqueueTask", {
       task: {
         eventName: "exportBlock",
         request: {
           block: { id },
-          recursive: false,
-          exportOptions: {
-            exportType: "markdown",
-            timeZone: "Europe/Zurich",
-            locale: "en",
-            collectionViewExportType: "all",
-          },
+          recursive: this.recursiveExport,
+          exportOptions,
         },
       },
     })
